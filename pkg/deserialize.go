@@ -290,7 +290,8 @@ func (this *SerializedObjectParser) parseStream() {
 	this.print("Contents")
 	this.increaseIndent()
 	for this._data.size() > 0 {
-		if nil != this.readContentElement() {
+		if e1 := this.readContentElement(); nil != e1 {
+			//log.Println(e1)
 			break
 		}
 	}
@@ -543,7 +544,8 @@ func (this *SerializedObjectParser) readClassAnnotation() {
  ******************/
 func (this *SerializedObjectParser) readContentElement() error {
 	//Peek the next byte and delegate to the appropriate method
-	switch this._data.peek() {
+	t1 := this._data.peek()
+	switch t1 {
 	case TC_OBJECT: //TC_OBJECT
 		this.readNewObject()
 		break
@@ -556,19 +558,16 @@ func (this *SerializedObjectParser) readContentElement() error {
 		this.readNewArray()
 		break
 
-	case TC_STRING:
 	//TC_STRING
-	case TC_LONGSTRING: //TC_LONGSTRING
+	case TC_STRING, TC_LONGSTRING: //TC_LONGSTRING
 		this.readNewString()
 		break
 
 	case TC_ENUM: //TC_ENUM
 		this.readNewEnum()
 		break
-
-	case TC_CLASSDESC:
 	//TC_CLASSDESC
-	case TC_PROXYCLASSDESC: //TC_PROXYCLASSDESC
+	case TC_CLASSDESC, TC_PROXYCLASSDESC: //TC_PROXYCLASSDESC
 		this.readNewClassDesc()
 		break
 
@@ -598,7 +597,7 @@ func (this *SerializedObjectParser) readContentElement() error {
 
 	default:
 		//this.print("Invalid content element type 0x" + this.byteToHex(this._data.peek()))
-		return errors.New("Error: Illegal content element type.")
+		return errors.New(fmt.Sprintf("Error: Illegal content element type: %d.", t1))
 	}
 	return nil
 }
@@ -933,8 +932,7 @@ func (this *SerializedObjectParser) readClassDesc() *ClassDataDesc {
 	case TC_REFERENCE: //TC_REFERENCE
 		refHandle = this.readPrevObject()                 //Look up a referenced class data description object and return it
 		for _, cdd := range this._classDataDescriptions { //Iterate over all class data descriptions
-			for classIndex := 0; classIndex < cdd.getClassCount(); { //Iterate over all classes in this class data description
-				classIndex += 1
+			for classIndex := 0; classIndex < cdd.getClassCount(); classIndex += 1 { //Iterate over all classes in this class data description
 				if cdd.getClassDetails(classIndex).getHandle() == refHandle { //Check if the reference handle matches
 					return cdd.buildClassDataDescFromIndex(classIndex) //Generate a ClassDataDesc starting from the given index and return it
 				}
@@ -1032,7 +1030,11 @@ func (this *SerializedObjectParser) readClassData(cdd *ClassDataDesc) {
 				var x1 = this._data.peek()
 				for x1 != TC_ENDBLOCKDATA {
 					//Read a content element
-					this.readContentElement()
+					err := this.readContentElement()
+					if nil != err {
+						log.Println("debug")
+						break
+					}
 					x1 = this._data.peek()
 				}
 
@@ -1244,7 +1246,9 @@ func (this *SerializedObjectParser) readArrayField() {
 	case TC_NULL: //
 		this.readNullReference()
 		break
-
+	case TC_OBJECT:
+		this.readNewObject()
+		break
 	case TC_ARRAY: //TC_ARRAY
 		this.readNewArray()
 		break
@@ -1394,8 +1398,7 @@ func (this *SerializedObjectParser) readNewArray() {
 	//Array data
 	this.print("Values")
 	this.increaseIndent()
-	for i := 0; i < size; {
-		i += 1
+	for i := 0; i < size; i += 1 {
 		//Print element index
 		this.print("Index ", i, ":")
 		this.increaseIndent()
@@ -1506,8 +1509,7 @@ func (this *SerializedObjectParser) readBlockData() {
 	this.print("Length - ", len, " - 0x"+this.byteToHex((byte)(len&0xff)))
 
 	//contents
-	for i := 0; i < len; {
-		i += 1
+	for i := 0; i < len; i += 1 {
 		contents += this.byteToHex(this._data.pop())
 	}
 	this.print("Contents - 0x" + contents)
