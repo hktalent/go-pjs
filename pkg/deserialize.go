@@ -213,6 +213,7 @@ func NewSerializedObjectParser(rd io.Reader, options ...Option) *SerializedObjec
 	sop := &SerializedObjectParser{
 		rd:                     buf,
 		maxDataBlockSize:       buf.Size(),
+		_handleValue:           0x7e0000,
 		_data:                  Smooth{data: []byte{}},
 		_classDataDescriptions: []*ClassDataDesc{},
 		so:                     &SerObject{},
@@ -226,8 +227,18 @@ func NewSerializedObjectParser(rd io.Reader, options ...Option) *SerializedObjec
 	return sop
 }
 
-func (this *SerializedObjectParser) intToHex(n int) string {
-	return fmt.Sprintf("%X", n)
+func (this *SerializedObjectParser) intToHex(i int) string {
+	var b1 = make([]byte, 4)
+	binary.BigEndian.PutUint32(b1, uint32(i))
+	return fmt.Sprintf("%02x", b1[0]) +
+		fmt.Sprintf(" %02x", b1[1]) +
+		fmt.Sprintf(" %02x", b1[2]) +
+		fmt.Sprintf(" %02x", b1[3])
+	//return fmt.Sprintf("%s", hex.EncodeToString(b1))
+	//return fmt.Sprintf("%02x", byte((i&0xff000000)>>24)) +
+	//	fmt.Sprintf(" %02x", byte((i&0xff0000)>>16)) +
+	//	fmt.Sprintf(" %02x", byte((i&0xff00)>>8)) +
+	//	fmt.Sprintf(" %02x", byte(i&0xff))
 }
 
 func (this *SerializedObjectParser) parseStream() {
@@ -293,7 +304,7 @@ func (this *SerializedObjectParser) newHandle1() int {
 
 	//Increment the next handle value and return the one we just assigned
 	this._handleValue++
-	return handleValue
+	return int(handleValue)
 }
 
 // newHandle adds a parsed object to the existing indexed handles which can be used later to lookup references to
@@ -786,11 +797,11 @@ func (this *SerializedObjectParser) readFields(cdd *ClassDataDesc) {
 		this.increaseIndent()
 		var i uint = 0
 		for i < count {
-			i += 1
 			this.print(i, ":")
 			this.increaseIndent()
 			this.readFieldDesc(cdd)
 			this.decreaseIndent()
+			i += 1
 		}
 		this.decreaseIndent()
 	}
@@ -1430,7 +1441,7 @@ func (this *SerializedObjectParser) readTC_STRING() string {
 
 func (this *SerializedObjectParser) readPrevObject() int {
 	var b1, b2, b3, b4 byte
-	var handle int
+	var handle uint32
 
 	//TC_REFERENCE
 	b1 = this._data.pop()
@@ -1445,10 +1456,13 @@ func (this *SerializedObjectParser) readPrevObject() int {
 	b2 = this._data.pop()
 	b3 = this._data.pop()
 	b4 = this._data.pop()
-	handle = (int(b1<<24) & 0xff000000) +
-		(int(b2<<16) & 0xff0000) +
-		(int(b3<<8) & 0xff00) +
-		(int(b4) & 0xff)
+
+	var a11 = []byte{b1, b2, b3, b4}
+	handle = binary.BigEndian.Uint32(a11)
+	//handle = (uint32(b1<<24) & 0xff000000) +
+	//(uint32(b2<<16) & 0xff0000) +
+	//(uint32(b3<<8) & 0xff00) +
+	//(uint32(b4) & 0xff)
 
 	this.print("Handle - ", handle, " - 0x"+this.byteToHex(b1)+" "+this.byteToHex(b2)+" "+this.byteToHex(b3)+" "+this.byteToHex(b4))
 
@@ -1456,7 +1470,7 @@ func (this *SerializedObjectParser) readPrevObject() int {
 	this.decreaseIndent()
 
 	//Return the handle
-	return handle
+	return int(handle)
 }
 
 func (this *SerializedObjectParser) readNullReference() {

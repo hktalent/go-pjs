@@ -44,6 +44,7 @@ func NewSerializationDumper() *SerializedObjectParser {
 
 		_data:                  Smooth{data: []byte{}},
 		_classDataDescriptions: []*ClassDataDesc{},
+		_handleValue:           0x7e0000,
 		so:                     &SerObject{},
 	}
 	sop._data._p = sop
