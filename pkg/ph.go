@@ -3,8 +3,11 @@ package pkg
 import "github.com/pkg/errors"
 
 const (
+	STREAM_MAGIC1 byte = 0xac
+	STREAM_MAGIC2 byte = 0xed
+
 	STREAM_MAGIC      uint16 = uint16(0xaced)
-	STREAM_VERSION    uint16 = 5
+	STREAM_VERSION    byte   = 0x05
 	TC_NULL           byte   = 0x70 // 空指针
 	TC_REFERENCE      byte   = 0x71
 	TC_CLASSDESC      byte   = 0x72 // TC_CLASSDESC. 指定这是一个新类。
@@ -28,6 +31,11 @@ const (
 	SC_EXTERNALIZABLE byte = 0x04
 	SC_ENUM           byte = 0x10
 	SC_Fail           byte = 0x00
+	RMI_Call          byte = 0x50
+	RMI_ReturnData    byte = 0x51
+	RMI_Ping          byte = 0x52
+	RMI_PingAck       byte = 0x53
+	RMI_DgcAck        byte = 0x54
 )
 
 /*

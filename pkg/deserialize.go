@@ -23,7 +23,8 @@ func ParseSerializedObject(buf []byte) (content []interface{}, err error) {
 	option := SetMaxDataBlockSize(len(buf))
 	this := NewSerializedObjectParser(bytes.NewReader(buf), option)
 
-	return this.ParseSerializedObject()
+	this.parseStream()
+	return nil, nil
 }
 
 // ParseSerializedObject parses a serialized java object from stream.
@@ -212,7 +213,7 @@ func NewSerializedObjectParser(rd io.Reader, options ...Option) *SerializedObjec
 	sop := &SerializedObjectParser{
 		rd:                     buf,
 		maxDataBlockSize:       buf.Size(),
-		_data:                  Smooth{},
+		_data:                  Smooth{data: []byte{}},
 		_classDataDescriptions: []*ClassDataDesc{},
 		so:                     &SerObject{},
 	}
@@ -228,6 +229,63 @@ func NewSerializedObjectParser(rd io.Reader, options ...Option) *SerializedObjec
 func (this *SerializedObjectParser) intToHex(n int) string {
 	return fmt.Sprintf("%X", n)
 }
+
+func (this *SerializedObjectParser) parseStream() {
+	var b1, b2 byte
+
+	//The stream may begin with an RMI packet type byte, print it if so
+	if b1 = this._data.peek(); b1 != STREAM_MAGIC1 {
+		b1 = this._data.pop()
+		switch b1 {
+		case RMI_Call:
+			this.print("RMI Call - 0x50")
+			break
+		case RMI_ReturnData:
+			this.print("RMI ReturnData - 0x51")
+			break
+		case RMI_Ping:
+			this.print("RMI Ping - 0x52")
+			break
+		case RMI_PingAck:
+			this.print("RMI PingAck - 0x53")
+			break
+		case RMI_DgcAck:
+			this.print("RMI DgcAck - 0x54")
+			break
+		default:
+			this.print("Unknown RMI packet type - 0x" + this.byteToHex(b1))
+			break
+		}
+	}
+
+	//Magic number, print and validate
+	b1 = this._data.pop()
+	b2 = this._data.pop()
+	this.print("STREAM_MAGIC - 0x" + this.byteToHex(b1) + " " + this.byteToHex(b2))
+	if b1 != STREAM_MAGIC1 || b2 != STREAM_MAGIC2 {
+		this.print("Invalid STREAM_MAGIC, should be 0xac ed")
+		return
+	}
+
+	//Serialization version
+	b1 = this._data.pop()
+	b2 = this._data.pop()
+	this.print("STREAM_VERSION - 0x" + this.byteToHex(b1) + " " + this.byteToHex(b2))
+	if b1 != SC_Fail || b2 != STREAM_VERSION {
+		this.print("Invalid STREAM_VERSION, should be 0x00 05")
+	}
+
+	//Remainder of the stream consists of one or more 'content' elements
+	this.print("Contents")
+	this.increaseIndent()
+	for this._data.size() > 0 {
+		if nil != this.readContentElement() {
+			break
+		}
+	}
+	this.decreaseIndent()
+}
+
 func (this *SerializedObjectParser) newHandle1() int {
 	handleValue := this._handleValue
 	//Print the handle value
@@ -247,6 +305,7 @@ func (this *SerializedObjectParser) newHandle(obj interface{}) interface{} {
 }
 
 func (this *SerializedObjectParser) print(s ...interface{}) {
+	fmt.Printf(this._indent)
 	for _, x := range s {
 		fmt.Printf("%v", x)
 	}
@@ -471,7 +530,7 @@ func (this *SerializedObjectParser) readClassAnnotation() {
  *	TC_BLOCKDATA		(0x77)
  *	TC_BLOCKDATALONG	(0x7a)
  ******************/
-func (this *SerializedObjectParser) readContentElement() {
+func (this *SerializedObjectParser) readContentElement() error {
 	//Peek the next byte and delegate to the appropriate method
 	switch this._data.peek() {
 	case TC_OBJECT: //TC_OBJECT
@@ -527,9 +586,10 @@ func (this *SerializedObjectParser) readContentElement() {
 		break
 
 	default:
-		this.print("Invalid content element type 0x" + this.byteToHex(this._data.peek()))
-		log.Panicln("Error: Illegal content element type.")
+		//this.print("Invalid content element type 0x" + this.byteToHex(this._data.peek()))
+		return errors.New("Error: Illegal content element type.")
 	}
+	return nil
 }
 
 /*******************
@@ -674,7 +734,7 @@ func (this *SerializedObjectParser) readLongUtf() string {
 	var content = ""
 	var hex = ""
 	var b1, b2, b3, b4, b5, b6, b7, b8 byte
-	var len int64
+	var len uint64
 
 	//Length
 	b1 = this._data.pop()
@@ -685,19 +745,19 @@ func (this *SerializedObjectParser) readLongUtf() string {
 	b6 = this._data.pop()
 	b7 = this._data.pop()
 	b8 = this._data.pop()
-	len = (int64(b1<<56) & 0xff00000000000000) +
-		(int64(b2<<48) & 0xff000000000000) +
-		(int64(b3<<40) & 0xff0000000000) +
-		(int64(b4<<32) & 0xff00000000) +
-		(int64(b5<<24) & 0xff000000) +
-		(int64(b6<<16) & 0xff0000) +
-		(int64(b7<<8) & 0xff00) +
-		int64(b8&0xff)
+	len = (uint64(b1<<56) & 0xff00000000000000) +
+		(uint64(b2<<48) & 0xff000000000000) +
+		(uint64(b3<<40) & 0xff0000000000) +
+		(uint64(b4<<32) & 0xff00000000) +
+		(uint64(b5<<24) & 0xff000000) +
+		(uint64(b6<<16) & 0xff0000) +
+		(uint64(b7<<8) & 0xff00) +
+		uint64(b8&0xff)
 	this.print("Length - ", len, " - 0x"+this.byteToHex(b1)+" "+this.byteToHex(b2)+" "+this.byteToHex(b3)+" "+this.byteToHex(b4)+" "+
 		this.byteToHex(b5)+" "+this.byteToHex(b6)+" "+this.byteToHex(b7)+" "+this.byteToHex(b8))
 
 	//Contents
-	var l int64 = 0
+	var l uint64 = 0
 	for l < len {
 		l += 1
 		b1 = this._data.pop()
@@ -848,12 +908,11 @@ func (this *SerializedObjectParser) readProxyClassDescInfo(cdd *ClassDataDesc) {
  ******************/
 func (this *SerializedObjectParser) readClassDesc() *ClassDataDesc {
 	var refHandle int
-
+	var b1 = this._data.peek()
 	// Peek the type and delegate to the appropriate method
-	switch this._data.peek() {
-	case TC_CLASSDESC:
+	switch b1 {
 	// TC_CLASSDESC
-	case TC_PROXYCLASSDESC: // TC_PROXYCLASSDESC
+	case TC_CLASSDESC, TC_PROXYCLASSDESC: // TC_PROXYCLASSDESC
 		return this.readNewClassDesc()
 
 	case TC_NULL: //TC_NULL
@@ -917,8 +976,7 @@ func (this *SerializedObjectParser) readClassData(cdd *ClassDataDesc) {
 	//Print class data if there is any
 	if cdd != nil {
 		//Iterate backwards through the classes as we need to deal with the most super (last added) class first
-		for classIndex = cdd.getClassCount() - 1; classIndex >= 0; {
-			classIndex -= 1
+		for classIndex = cdd.getClassCount() - 1; classIndex >= 0; classIndex -= 1 {
 			//Get the class details
 			cd = cdd.getClassDetails(classIndex)
 
@@ -1248,14 +1306,14 @@ func (this *SerializedObjectParser) readDoubleField() {
 	b6 = this._data.pop()
 	b7 = this._data.pop()
 	b8 = this._data.pop()
-	var xx int64 = (int64(b1<<56) & 0xff00000000000000) +
-		(int64(b2<<48) & 0xff000000000000) +
-		(int64(b3<<40) & 0xff0000000000) +
-		(int64(b4<<32) & 0xff00000000) +
-		(int64(b5<<24) & 0xff000000) +
-		(int64(b6<<16) & 0xff0000) +
-		(int64(b7<<8) & 0xff00) +
-		int64(b8&0xff)
+	var xx uint64 = (uint64(b1<<56) & 0xff00000000000000) +
+		(uint64(b2<<48) & 0xff000000000000) +
+		(uint64(b3<<40) & 0xff0000000000) +
+		(uint64(b4<<32) & 0xff00000000) +
+		(uint64(b5<<24) & 0xff000000) +
+		(uint64(b6<<16) & 0xff0000) +
+		(uint64(b7<<8) & 0xff00) +
+		uint64(b8&0xff)
 	this.print("(double)", xx, " - 0x"+this.byteToHex(b1)+
 		" "+this.byteToHex(b2)+" "+this.byteToHex(b3)+" "+this.byteToHex(b4)+" "+this.byteToHex(b5)+" "+this.byteToHex(b6)+" "+
 		this.byteToHex(b7)+" "+this.byteToHex(b8))
@@ -1484,9 +1542,7 @@ func (this *SerializedObjectParser) readLongBlockData() {
 func (this *SerializedObjectParser) content(allowedNames map[string]bool) (content interface{}, err error) {
 	var tc uint8
 
-	if tc, err = this.readUInt8(); err != nil {
-		return
-	}
+	tc = this._data.peek()
 	this.so.Tc_Type = tc
 	switch tc {
 	case TC_NULL: // = 0x70 // 空指针
@@ -1694,7 +1750,7 @@ func (this *SerializedObjectParser) version() error {
 		return err
 	}
 
-	if ver != STREAM_VERSION {
+	if byte(ver) != STREAM_VERSION {
 		return errors.Errorf("protocol version not recognized: wanted 5 got %d", ver)
 	}
 	this.so.STREAM_VERSION = STREAM_VERSION

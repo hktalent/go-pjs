@@ -36,6 +36,10 @@ func (this *ClassDataDesc) ClassDataDesc(cd []*ClassDetails) {
 	this._classDetails = cd
 }
 
+func (this *ClassDataDesc) GetClassDataDesc() []*ClassDetails {
+	return this._classDetails
+}
+
 /*******************
  * Build a new ClassDataDesc object from the given class index.
  *
@@ -63,11 +67,7 @@ func (this *ClassDataDesc) buildClassDataDescFromIndex(index int) *ClassDataDesc
 func (this *ClassDataDesc) addSuperClassDesc(scdd *ClassDataDesc) {
 	// Copy the ClassDetails elements to this ClassDataDesc object
 	if scdd != nil {
-		var i int = 0
-		for i < scdd.getClassCount() {
-			i += 1
-			this._classDetails = append(this._classDetails, scdd.getClassDetails(i))
-		}
+		this._classDetails = append(this._classDetails, scdd.GetClassDataDesc()...)
 	}
 }
 
@@ -137,6 +137,9 @@ func (this *ClassDataDesc) setLastFieldClassName1(cn1 string) {
  * @return The requested ClassDetails object.
  ******************/
 func (this *ClassDataDesc) getClassDetails(index int) *ClassDetails {
+	if index >= len(this._classDetails) {
+		return nil
+	}
 	return this._classDetails[index]
 }
 

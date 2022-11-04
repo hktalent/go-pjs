@@ -11,12 +11,14 @@ type SerChildObj struct {
 
 type SerObject struct {
 	STREAM_MAGIC   uint16 `json:"STREAM_MAGIC"`
-	STREAM_VERSION uint16 `json:"STREAM_VERSION"`
+	STREAM_VERSION byte   `json:"STREAM_VERSION"`
 	Tc_Type        byte   `json:"tc_Type"`
 }
 
 type Smooth struct {
-	_p *SerializedObjectParser
+	_p   *SerializedObjectParser
+	nPos int
+	data []byte
 }
 
 // SerializedObjectParser reads serialized java objects
@@ -36,3 +38,14 @@ type SerializedObjectParser struct {
 const bufferSize = 1024
 
 type Option func(sop *SerializedObjectParser)
+
+func NewSerializationDumper() *SerializedObjectParser {
+	sop := &SerializedObjectParser{
+
+		_data:                  Smooth{data: []byte{}},
+		_classDataDescriptions: []*ClassDataDesc{},
+		so:                     &SerObject{},
+	}
+	sop._data._p = sop
+	return sop
+}
