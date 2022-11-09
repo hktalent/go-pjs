@@ -1241,8 +1241,9 @@ func (this *SerializedObjectParser) readArrayField() {
 	this.print("(array)")
 	this.increaseIndent()
 
+	t1 := this._data.peek()
 	//Array could be null
-	switch this._data.peek() {
+	switch t1 {
 	case TC_NULL: //
 		this.readNullReference()
 		break
@@ -1256,7 +1257,11 @@ func (this *SerializedObjectParser) readArrayField() {
 	case TC_REFERENCE: //TC_REFERENCE
 		this.readPrevObject()
 		break
-
+	case TC_STRING:
+		this.readNewString()
+		break
+	case TC_CLASS:
+		this.readNewClass()
 	default: //Unknown
 		log.Panicln("Error: Unexpected array field value type (0x" + this.byteToHex(this._data.peek()))
 	}
