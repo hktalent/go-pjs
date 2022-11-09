@@ -1263,6 +1263,7 @@ func (this *SerializedObjectParser) readArrayField() {
 	case TC_CLASS:
 		this.readNewClass()
 	default: //Unknown
+		log.Printf("format %x", t1)
 		log.Panicln("Error: Unexpected array field value type (0x" + this.byteToHex(this._data.peek()))
 	}
 
